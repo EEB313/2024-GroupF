@@ -83,6 +83,7 @@ atmo_data_subsampled <- atmo_data_filtered%>%
   
 atmo_data_subsampled<- atmo_data_subsampled%>%
   filter(YEAR >=1981)
+atmo_data_subsampled$YEAR <- as.numeric(atmo_data_subsampled$YEAR)
 ```
 
 
