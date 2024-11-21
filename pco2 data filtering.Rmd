@@ -1,0 +1,116 @@
+---
+title: "project work"
+output: pdf_document
+date: "2024-11-19"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+
+
+```{r}
+library(tidyverse)
+```
+
+
+```{r}
+atmo_data <- read_csv("Project/LDEO_Database_V2019.csv")
+
+atmo_data <- LDEO_Database_V2019
+```
+
+```{r}
+atmo_data$`MONTH/DAY/YEAR` <- as.Date(atmo_data$`MONTH/DAY/YEAR`, format = "%m/%d/%Y")
+
+range(atmo_data$`MONTH/DAY/YEAR`)
+```
+
+```{r}
+#filtering to fit plankton data range and convert date to just year
+
+atmo_data_filtered <- atmo_data %>%
+  filter(LAT >= 36.28 & LAT <= 64.907 & LON >= -74.743 & LON <= -23.092)
+
+atmo_data_filtered$`MONTH/DAY/YEAR`<-format(atmo_data_filtered$`MONTH/DAY/YEAR`, "%Y")
+
+atmo_data_filtered <- atmo_data_filtered%>%
+  rename(YEAR = `MONTH/DAY/YEAR`)
+
+```
+
+
+
+
+```{r}
+atmo_data_subsampled %>%
+  group_by(YEAR)%>%
+  summarise(observations = n())%>%
+  arrange(YEAR)
+```
+
+
+```{r}
+set.seed(42)
+atmo_data_subsampled <- atmo_data_filtered%>%
+  group_by(YEAR) %>%
+  filter(sum(SAL != -999) >= 5) %>%
+  filter(SAL != -999 | sum(SAL != -999) < 5) %>%
+  slice_sample(n=5)%>%
+  ungroup()
+  
+atmo_data_subsampled<- atmo_data_subsampled%>%
+  filter(YEAR >=1981)
+```
+
+
+```{r}
+atmo_data_filtered%>%
+  ggplot(aes(x=YEAR, y=PCO2_TEQ)) +
+  geom_point() 
+
+atmo_data %>%
+  ggplot(aes(x=`MONTH/DAY/YEAR`, y=PCO2_TEQ)) +
+  geom_point()
+
+atmo_data %>%
+  ggplot(aes(x=`MONTH/DAY/YEAR`, y=TEMP)) +
+  geom_point()
+
+#water pco2 over time
+```
+```{r}
+#removing na
+
+atmo_data_filtered <- atmo_data_filtered %>%
+  filter(TEMP != -999.9 & SAL != -999.9 & PCO2_TEQ != -999.9)
+
+#making averages
+
+
+
+```
+
+
