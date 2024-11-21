@@ -1,0 +1,78 @@
+---
+title: "project"
+author: "Silas Peters"
+date: "2024-11-12"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+require(tidyverse)
+require(lme4)
+require(deSolve)
+install.packages('vegan')
+library(vegan)
+```
+
+
+```{r}
+plankton <- read.csv("plankton.csv")
+waterdat <- read.csv("waterquality.csv")
+```
+
+# filtering the data
+```{r}
+head(plankton)
+# filter for year 1983:2013
+# filter around 52 degree latitute
+# remove plankton sampled after 
+
+new_plankton <- plankton %>%
+  filter(Year >= 1972 & Year <= 2018, Latitude >= 52) %>%
+  select_if(~ !any(is.na(.)))
+
+new_plankton
+```
+# calculate growth rate
+```{r}
+#new_plankton %>%
+  #arrange(Year) %>%
+  #across(cols(id_40:id_10754), aggregate(Year, mean))
+
+new_plankton %>%
+  pivot_longer(cols = starts_with("id"),
+    names_to = "taxa_ID",
+               values_to = "count") %>%
+  group_by(Year, taxa_ID) %>%
+  summarise(total_count = sum(count)) -> count_plankton
+
+count_plankton %>% 
+  arrange(taxa_ID, Year) %>%
+  group_by(taxa_ID) %>%
+  mutate(Diff_year = Year - lag(Year),
+         Diff_growth = total_count - lag(total_count),
+         Rate_percent = (Diff_growth / Diff_year)/total_count * 100) -> growth_dat
+
+growth_dat %>% 
+  mutate(clean_growth_rate = case_when(total_count == 0 ~ 0, 
+                                       TRUE ~ Rate_percent)) -> clean_growth_dat
+
+growth_dat %>%
+  filter(taxa_ID == "id_1") %>%
+  ggplot(aes(x = Year, y = Rate_percent, color = taxa_ID)) +
+  geom_point() +
+  theme(legend.position="none")
+```
+
+# calculating diversity indices
+```{r}
+clean_growth_dat %>%
+  group_by(Year) %>%
+  summarize(diversity_index = diversity(total_count, index = "invsimpson")) %>%
+  ggplot(aes(x = Year, y = diversity_index)) +
+  geom_point()
+```
+
