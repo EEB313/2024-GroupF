@@ -1,0 +1,204 @@
+---
+title: "Clean Final Code"
+output: pdf_document
+date: "2024-12-04"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+]
+# loading required packages 
+```{r}
+# used for general functions, plotting
+library(tidyverse)
+
+#used for diversity index calculations 
+library(vegan)
+
+# used for data visualization
+library(ggpubr)
+
+# used for forecasting values of time series 
+library(forecast)
+```
+
+# reading in required data
+```{r}
+plankton_raw <- read.csv("plankton.csv")
+pco_raw <- read.csv("atmo_data_medians_1991-2018.csv")
+combined_data <- read.csv("combined_data_1991-2018.csv")
+```
+
+# cleaning and wrangling the plankton data
+```{r}
+head(plankton_raw)
+# filter for year 1991 to 2018 to match pCO2 data and have full plankton data
+
+new_plankton <- plankton_raw %>%
+  filter(Year >= 1991 & Year <= 2018) %>%
+  select_if(~ !any(is.na(.)))
+
+# pivot the dataset longer so counts are in one row for a year and taxa id in 
+# a second column. Summed on recommendation of Mete and Zoe
+
+new_plankton %>%
+  pivot_longer(cols = starts_with("id"),
+    names_to = "taxa_ID",
+               values_to = "count") %>%
+  group_by(Year, taxa_ID) %>%
+  summarise(total_count = sum(count)) -> clean_plankton
+
+# Shannons diversity index calculated 
+clean_plankton %>%
+  group_by(Year) %>%
+  summarize(diversity_index = 
+              diversity(total_count, index = "shannon")) -> clean_div_data
+
+# plotting quickly to see general trend 
+clean_div_data %>%
+  ggplot(aes(x = Year, y = diversity_index)) +
+  geom_point() +
+  geom_smooth(method = 'lm')
+
+# testing to see if removing taxa added after 1991 will affect diversity values
+
+# removing taxa identified as being added later
+plankton_raw %>%
+  subset(select = -c(id_963, id_357, id_347, id_354, id_355, id_10671, 
+                     id_130, id_133, id_195, id_198, id_962, id_985, id_134, 
+                     id_135, id_197, id_270, id_634, id_805, id_807, id_806, 
+                     id_818, id_997, id_999, id_148, id_813, id_1568, id_601, 
+                     id_1576, id_1577, id_1543, id_1570, id_988, id_1592, 
+                     id_1593, id_10595, id_1549, id_1551, id_1588, id_1579, 
+                     id_1585, id_1599, id_1608, id_1609, id_1601, id_1602, 
+                     id_1603, id_1604, id_1606, id_1607, id_1616, id_10375, 
+                     id_1622, id_1629, id_1644, id_1648, id_1654, id_1612, 
+                     id_1621, id_1623, id_1627, id_1632, id_1634, id_1635, 
+                     id_1639, id_1642, id_1574, id_1618, id_5500, id_1624, 
+                     id_1690, id_1677, id_1679, id_1680, id_1681, id_1682, 
+                     id_1628, id_626, id_10668, id_10532, id_10705, id_10695, 
+                     id_10069, id_10745, id_1678, id_10744, id_10737, 
+                     id_10749)) ->omit_plankton
+
+# filtering to the same parameters and wrangling the same 
+new_omit_plankton <- omit_plankton %>%
+  filter(Year >= 1991 & Year <= 2018) %>%
+  select_if(~ !any(is.na(.)))
+
+new_omit_plankton %>%
+  pivot_longer(cols = starts_with("id"),
+    names_to = "taxa_ID",
+               values_to = "count") %>%
+  group_by(Year, taxa_ID) %>%
+  summarise(total_count = sum(count)) -> count_omit_plankton
+
+# calculating diversity values 
+count_omit_plankton %>%
+  group_by(Year) %>%
+  summarize(diversity_index = diversity(total_count, 
+                                        index = "shannon")) -> div_omit_dat
+
+# viewing data frames, they were not different 
+div_omit_dat
+clean_div_data
+# as they are not different, we did not remove taxa added after 1991 
+```
+
+# cleaning and wrangling the pCO2 data 
+
+# time series analysis
+```{r}
+# turning data into time series for analysis
+# the variable of interest (diversity and pCO2) are the data and the 
+# year of start is noted 
+ts_plankton <- ts(data = clean_div_data$diversity_index, 
+                  start = c(1991))
+
+ts_pco <- ts(data = pco_raw$median_PCO2_TEQ,
+              start = c(1991))
+
+# checking code worked 
+class(ts_plankton)
+class(ts_pco)
+
+# plotting time series across time to visualize patterns
+plot(ts_plankton, 
+     ylab = "Plankton Diversity")
+plot(ts_pco, 
+     ylab = "pCO2 (atm)")
+plot(cbind(ts_plankton, ts_pco), yax.flip = TRUE, 
+     main = "Time Series of Plankton Diversity and pCO2",
+     xlab = "Time"
+     )
+
+# plotting using ggplot for final report to look cleaner
+head(combined_data)
+
+plankton_plot <- combined_data %>%
+  ggplot(aes(x = YEAR, y = diversity_index)) +
+  geom_line(colour = "lightgreen", size = 1) +
+  labs(x = "Year", y = "Shannon Diversity Index") +
+  ggtitle("Time Series of Plankton Diversity") +
+  theme_bw()
+
+carbon_plot <- combined_data %>%
+  ggplot(aes(x = YEAR, y = median_PCO2_TEQ)) +
+  geom_line(colour = "lightblue", size = 1) +
+  labs(x = "Year", y = "pCO2 (atm)") +
+  ggtitle("Time Series of Ocean Acidity") +
+  theme_bw()
+
+ggarrange(plankton_plot, carbon_plot,
+          ncol= 1,
+          nrow = 2) -> combo_plot
+
+combo_plot
+
+# cross correlation was performed - gives a plot and stores values 
+ccf(ts_pco, ts_plankton, ylab = "Cross-correlation", 
+    main = "Results of Cross-Correlation") -> ccf_values
+
+ccf_values
+
+# ARIMA model was initially automatically fit 
+# turning pCO2 values into numeric values to be external regressor in model
+as.numeric(ts_pco) -> pco_reg
+
+model_auto <- auto.arima(ts_plankton, xreg = pco_reg)
+model_auto
+
+# also tried providing parameters to compare how they were to the autofitted
+# model out of interest 
+model_arima1 <- arima(ts_plankton, xreg = pco_reg, order = c(0,1,0))
+model_arima1
+model_arima2 <- arima(ts_plankton, xreg = pco_reg, order = c(0,0,1))
+model_arima2
+model_arima3 <- arima(ts_plankton, xreg = pco_reg, order = c(1,0,0))
+model_arima3
+model_arima4 <- arima(ts_plankton, xreg = pco_reg, order = c(1,1,1))
+model_arima4
+# out of these models, the autofitted one did have the lowest AIC score 
+# therefore we proceeded with this model 
+
+# checking the model with Ljung-Box Test and plotting residuals 
+checkresiduals(model_auto)
+
+# forecasting pCO2 values into the future from 2019 - 2035
+forecast(ts_pco, h = 17) -> forecast_pco
+
+# making the forecast values numerical so we can use them in the forecast 
+# as the future values of the external regressor 
+# calling the mean gives the forecast values
+as.numeric(forecast_pco$mean) -> pco_forecast_values
+pco_forecast_values
+
+# using the autofitted model and the forecast values to predict diversity
+forecast(model_auto, xreg = pco_forecast_values) -> diversity_forecast
+print(diversity_forecast$mean)
+
+# plotting our forecast
+autoplot(diversity_forecast, ylab = "Forecast Diversity Index", 
+         main = "Forecast Estimate From ARIMA Model")
+```
+
