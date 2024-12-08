@@ -202,3 +202,126 @@ autoplot(diversity_forecast, ylab = "Forecast Diversity Index",
          main = "Forecast Estimate From ARIMA Model")
 ```
 
+---------Naveen's section-----------
+
+```{r} 
+# reading data
+atmo_data <- read_csv("LDEO_Database_V2019.csv")
+```
+
+```{r}
+#filtering to convert date to just year and to fit plankton geographic range
+
+atmo_data$`MONTH/DAY/YEAR` <- as.Date(atmo_data$`MONTH/DAY/YEAR`, format = "%m/%d/%Y")
+
+atmo_data$`MONTH/DAY/YEAR`<-format(atmo_data$`MONTH/DAY/YEAR`, "%Y")
+
+atmo_data <- atmo_data%>%
+  rename(YEAR = `MONTH/DAY/YEAR`)
+
+atmo_data <- atmo_data %>%
+  filter(LAT >= 36.28 & LAT <= 64.907 & LON >= -74.743 & LON <= -23.092)
+```
+
+
+```{r}
+#selecting medians from each year and filtering to 1991-2018
+
+atmo_data_medians <- atmo_data %>%
+  group_by(YEAR) %>%
+  summarise(across(c(TEMP, PCO2_TEQ), median, .names = "median_{col}"))
+```
+
+
+```{r}
+#reading in plankton data and merging it with pco2 data
+
+plankton_diversity <- read_csv("div_clean_dat.csv")
+
+plankton_diversity <- plankton_diversity %>%
+  rename(YEAR = Year)
+
+combined_lm_data<- merge(atmo_data_medians, plankton_diversity) %>%
+  select(-...1, -median_TEMP)
+
+combined_lm_data$YEAR <- as.numeric(combined_lm_data$YEAR)
+
+combined_lm_data <- combined_lm_data %>%
+  filter(YEAR >=1991 & YEAR <= 2018)
+```
+
+
+```{r}
+#creating linear models and checking output
+
+model_pco2_diversity<- lm(formula = diversity_index ~ median_PCO2_TEQ, data = combined_lm_data)
+summary(model_pco2_diversity)
+
+model_pco2_year <- lm(median_PCO2_TEQ ~ YEAR, data = combined_lm_data)
+summary(model_pco2_year)
+```
+
+
+```{r}
+#checking the diagnostic plots
+
+plot(model_pco2_diversity)
+
+plot(model_pco2_year)
+```
+
+
+```{r}
+#making pco2 forecasts 
+
+timeline <- data.frame(YEAR = 2019:2035)
+
+timeline_prediction_pco2 <- predict(model_pco2_year, newdata = timeline)
+
+pco2_predicted_vals <- data.frame(timeline_prediction_pco2) %>%
+  rename(median_PCO2_TEQ=timeline_prediction_pco2)
+
+#making diversity forecasts with this data
+
+timeline_prediction_diversity <- predict(model_pco2_diversity, newdata = pco2_predicted_vals)
+
+predicted_diversity <- data.frame(timeline_prediction_diversity) %>%
+  mutate(YEAR = timeline$YEAR) %>%
+  mutate(median_PCO2_TEQ = pco2_predicted_vals$median_PCO2_TEQ) %>%
+  rename(diversity_index = timeline_prediction_diversity)
+
+```
+
+
+```{r}
+#making plots
+
+library(ggplot2)
+#combining past and predicted data  
+prediction_past <- rbind(combined_lm_data, predicted_diversity)
+
+prediction_past$color <- ifelse(prediction_past$YEAR > 2018, "slategrey", "black")
+
+#making a plot for pco2
+prediction_past %>%
+  ggplot(aes(x=YEAR, y=median_PCO2_TEQ)) +
+  geom_point(aes(color=color), size = 3) +
+  scale_color_identity() +
+  geom_smooth() +
+  theme_minimal() +
+  labs(title = "Change in pCO2 over time and predictions for the future", y = "Median pCO2", x = "Year")
+
+#making a plot for diversity
+
+prediction_past$color <- ifelse(prediction_past$YEAR > 2018, "lightgreen", "darkgreen")
+
+prediction_past %>%
+  ggplot(aes(x=YEAR, y=diversity_index)) +
+  geom_point(aes(color=color), size=3) +
+  scale_color_identity() +
+  geom_smooth() +
+  theme_minimal() +
+  labs(title = "Change in Shannon Diversity over time and predictions for the future", y= "Shannon Diversity", x="Year")
+```
+```
+
